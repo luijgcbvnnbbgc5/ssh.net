@@ -132,6 +132,68 @@ Acciones principales:
 6. Crear respaldos comprimidos.
 7. Consultar o buscar documentos cuando sea necesario.
 
+## Mejora de automatizaciones y redireccionamiento automático
+
+El asistente puede reforzarse con reglas de automatización que clasifiquen, redirijan y validen archivos sin intervención manual. La idea es que cada archivo nuevo pase por un flujo estándar: detección, clasificación, redireccionamiento, registro y verificación.
+
+### Reglas de redireccionamiento automático
+
+Configurar el atajo **Organizar Archivos** para evaluar cada archivo por extensión, nombre y ubicación de origen. Según el resultado, el archivo debe moverse automáticamente a la carpeta correspondiente.
+
+| Condición detectada | Destino automático | Acción adicional |
+| --- | --- | --- |
+| `.pdf`, `.docx`, `.xlsx`, `.txt`, `.rtf` | `01_Documentos` | Registrar tipo documental en el inventario. |
+| `.jpg`, `.jpeg`, `.png`, `.heic` | `02_Imagenes` | Conservar fecha de creación si está disponible. |
+| `.mp4`, `.mov` | `03_Videos` | Registrar tamaño para reportes de almacenamiento. |
+| `.mp3`, `.m4a`, `.wav` | `04_Audio` | Clasificar como audio o nota de voz. |
+| `.zip`, `.rar`, `.7z` | `05_Comprimidos` | Marcar como paquete comprimido. |
+| `.csv`, `.json` | `09_BaseDatos` | Evitar sobrescribir el inventario principal. |
+| Tipo desconocido | `08_Pendientes` | Marcar para revisión manual. |
+
+### Flujo recomendado de automatización
+
+1. Detectar archivos nuevos o modificados en la carpeta de entrada.
+2. Obtener nombre, extensión, tamaño, fecha y ruta original.
+3. Normalizar la extensión a minúsculas para evitar duplicados de reglas.
+4. Aplicar la tabla de redireccionamiento automático.
+5. Mover el archivo a la carpeta destino.
+6. Agregar o actualizar la entrada en `09_BaseDatos/inventario.csv`.
+7. Registrar archivos no reconocidos en un reporte de pendientes.
+8. Mostrar un resumen con archivos procesados, movidos, omitidos y pendientes.
+
+### Validaciones antes de mover archivos
+
+Antes de redirigir un archivo, el atajo debe comprobar:
+
+- Que el archivo todavía exista en la ubicación original.
+- Que la carpeta destino exista; si no existe, crearla automáticamente.
+- Que no haya otro archivo con el mismo nombre en el destino.
+- Que el inventario no quede duplicado.
+- Que los archivos críticos, como `inventario.csv`, no se sobrescriban accidentalmente.
+
+Cuando exista un conflicto de nombre, usar una estrategia consistente, por ejemplo agregar fecha y hora al nombre del archivo:
+
+```text
+Contrato.pdf
+Contrato_2026-08-14_1530.pdf
+```
+
+### Automatizaciones programadas sugeridas
+
+| Automatización | Frecuencia recomendada | Resultado esperado |
+| --- | --- | --- |
+| Organizar archivos | Al guardar o importar archivos | Archivos redirigidos a su carpeta correcta. |
+| Actualizar inventario | Diario | CSV actualizado con rutas y metadatos. |
+| Buscar duplicados | Semanal | Reporte de posibles duplicados. |
+| Respaldo comprimido | Diario o semanal | ZIP guardado en `06_Respaldos`. |
+| Estado del sistema | Semanal | Reporte RTF con estadísticas generales. |
+
+### Criterio de pruebas y comprobaciones
+
+Ejecutar pruebas automatizadas y validaciones de código en cada cambio que afecte la lógica o el comportamiento de la aplicación. No es necesario ejecutar estas comprobaciones cuando los cambios se limiten exclusivamente a comentarios, documentación o contenido no funcional.
+
+Ejecutar pruebas y comprobaciones de código para cualquier cambio funcional. Omitirlas cuando los cambios afecten únicamente a comentarios o documentación.
+
 ## Seguridad y privacidad
 
 El diseño funciona completamente en local:
