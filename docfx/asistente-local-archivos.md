@@ -1,3 +1,21 @@
+{
+  "observability": {
+    "enabled": false,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": false,
+      "persist": true,
+      "head_sampling_rate": 1
+    }
+  }
+}
+
 # Asistente local de archivos para iPhone 13 Pro
 
 Esta guía resume el sistema mostrado en las imágenes: un asistente 100% local para organizar, clasificar, buscar, respaldar y reportar archivos desde la app **Archivos** y **Atajos** de iOS, sin internet, sin nube y sin servicios externos.
