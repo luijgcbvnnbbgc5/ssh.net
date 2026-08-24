@@ -1,0 +1,52 @@
+[
+  {
+    "id": "START",
+    "outputs": {
+      "next": {
+        "elementId": "primary-model"
+      }
+    },
+    "type": "start"
+  },
+  {
+    "id": "primary-model",
+    "outputs": {
+      "success": {
+        "elementId": "END"
+      },
+      "fallback": {
+        "elementId": "fallback-model"
+      }
+    },
+    "type": "model",
+    "properties": {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "timeout": 3000,
+      "retries": 3
+    }
+  },
+  {
+    "id": "fallback-model",
+    "outputs": {
+      "success": {
+        "elementId": "END"
+      },
+      "fallback": {
+        "elementId": "END"
+      }
+    },
+    "type": "model",
+    "properties": {
+      "provider": "workers-ai",
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "timeout": 30000,
+      "retries": 0
+    }
+  },
+  {
+    "id": "END",
+    "outputs": {},
+    "type": "end"
+  }
+]
