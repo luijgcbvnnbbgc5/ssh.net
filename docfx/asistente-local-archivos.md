@@ -1,5 +1,4 @@
-{
-  "observability": {
+"observability": {
     "enabled": false,
     "head_sampling_rate": 1,
     "logs": {
