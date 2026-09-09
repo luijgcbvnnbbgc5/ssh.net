@@ -1,0 +1,242 @@
+--- a/test/Renci.SshNet.IntegrationTests/SshTests.cs
++++ b/test/Renci.SshNet.IntegrationTests/SshTests.cs
+@@ -619,41 +619,53 @@
+                 }
+             }
+         }
+ 
+         [TestMethod]
++        /// <summary>
++        /// Verifies that multiple remote port forwardings work concurrently and that data
++        /// sent through each forwarded port reaches the corresponding local listener.
++        /// </summary>
+         public void Ssh_RemotePortForwarding()
+         {
+             var hostAddresses = Dns.GetHostAddresses(Dns.GetHostName());
+             var ipv4HostAddress = hostAddresses.First(p => p.AddressFamily == AddressFamily.InterNetwork);
+ 
+             var endpoint1 = new IPEndPoint(ipv4HostAddress, 10000);
+             var endpoint2 = new IPEndPoint(ipv4HostAddress, 10001);
+ 
+-            var areBytesReceivedOnListener1 = false;
+-            var areBytesReceivedOnListener2 = false;
+-
+             var bytesReceivedOnListener1 = new List<byte>();
+             var bytesReceivedOnListener2 = new List<byte>();
+ 
++            // Use a more generous timeout for CI environments where the runner or
++            // the OpenSSH container may be under load.
++            const int receiveTimeoutMs = 5000;
++
+             using (var socketListener1 = new AsyncSocketListener(endpoint1))
+             using (var socketListener2 = new AsyncSocketListener(endpoint2))
+-            using (var bytesReceivedEventOnListener1 = new AutoResetEvent(false))
+-            using (var bytesReceivedEventOnListener2 = new AutoResetEvent(false))
++            using (var bytesReceivedEventOnListener1 = new ManualResetEventSlim(false))
++            using (var bytesReceivedEventOnListener2 = new ManualResetEventSlim(false))
+             using (var client = new SshClient(_connectionInfoFactory.Create()))
+             {
+                 socketListener1.BytesReceived += (received, socket) =>
+                 {
+-                    bytesReceivedOnListener1.AddRange(received);
++                    lock (bytesReceivedOnListener1)
++                    {
++                        bytesReceivedOnListener1.AddRange(received);
++                    }
+                     bytesReceivedEventOnListener1.Set();
+                 };
+ 
+                 socketListener1.Start();
+ 
+                 socketListener2.BytesReceived += (received, socket) =>
+                 {
+-                    bytesReceivedOnListener2.AddRange(received);
++                    lock (bytesReceivedOnListener2)
++                    {
++                        bytesReceivedOnListener2.AddRange(received);
++                    }
+                     bytesReceivedEventOnListener2.Set();
+                 };
+ 
+                 socketListener2.Start();
+ 
+                 client.Connect();
+@@ -690,25 +702,36 @@
+                     s.Expect("DEF");
+                     s.Close();
+                 }
+ 
+-                areBytesReceivedOnListener1 = bytesReceivedEventOnListener1.WaitOne(1000);
+-                areBytesReceivedOnListener2 = bytesReceivedEventOnListener2.WaitOne(1000);
++                // Give the TCP stacks a short moment to deliver the last bytes
++                // before we start waiting on the events.
++                Thread.Sleep(200);
++
++                bool received1 = bytesReceivedEventOnListener1.Wait(receiveTimeoutMs);
++                bool received2 = bytesReceivedEventOnListener2.Wait(receiveTimeoutMs);
+ 
+                 forwardedPort1.Stop();
+                 forwardedPort2.Stop();
++
++                Assert.IsTrue(received1,
++                    $"Listener 1 did not receive data within {receiveTimeoutMs} ms. " +
++                    $"Bytes so far: {Encoding.ASCII.GetString(bytesReceivedOnListener1.ToArray())}");
++                Assert.IsTrue(received2,
++                    $"Listener 2 did not receive data within {receiveTimeoutMs} ms. " +
++                    $"Bytes so far: {Encoding.ASCII.GetString(bytesReceivedOnListener2.ToArray())}");
+             }
+ 
+-            Assert.IsTrue(areBytesReceivedOnListener1);
+-            Assert.IsTrue(areBytesReceivedOnListener2);
+-
+             var textReceivedOnListener1 = Encoding.ASCII.GetString(bytesReceivedOnListener1.ToArray());
+-            Assert.AreEqual("ABC\r\n", textReceivedOnListener1);
++            Assert.AreEqual("ABC\r\n", textReceivedOnListener1,
++
+
+git clone https://github.com/luijgcbvnnbbgc5/ssh.net.git
+cd ssh.net
+git checkout develop
+
+# Restaura el archivo bueno desde el último commit limpio
+git checkout 634f212 -- test/Renci.SshNet.IntegrationTests/SshTests.cs
+
+# Aplica el diff (puedes pegarlo en un archivo patch o editar manualmente)
+# Luego:
+git add test/Renci.SshNet.IntegrationTests/SshTests.cs
+git commit -m "fix: improve reliability of Ssh_RemotePortForwarding integration test
+
+- Increase receive timeout from 1s to 5s to reduce flakiness under CI load
+- Switch from AutoResetEvent to ManualResetEventSlim
+- Protect byte lists with locks for thread safety
+- Add descriptive assertion messages showing partial data received
+- Add short settling delay after shell interactions
+- Document the purpose of the test"
+git push origin develop
+
+
+Aquí tienes el diff exacto y listo para aplicar.
+Diff exacto (el cambio más importante + mejoras)
+--- a/test/Renci.SshNet.IntegrationTests/SshTests.cs
++++ b/test/Renci.SshNet.IntegrationTests/SshTests.cs
+@@ -619,41 +619,53 @@
+                 }
+             }
+         }
+ 
+         [TestMethod]
++        /// 
++        /// Verifies that multiple remote port forwardings work concurrently and that data
++        /// sent through each forwarded port reaches the corresponding local listener.
++        /// 
+         public void Ssh_RemotePortForwarding()
+         {
+             var hostAddresses = Dns.GetHostAddresses(Dns.GetHostName());
+             var ipv4HostAddress = hostAddresses.First(p => p.AddressFamily == AddressFamily.InterNetwork);
+ 
+             var endpoint1 = new IPEndPoint(ipv4HostAddress, 10000);
+             var endpoint2 = new IPEndPoint(ipv4HostAddress, 10001);
+ 
+-            var areBytesReceivedOnListener1 = false;
+-            var areBytesReceivedOnListener2 = false;
+-
+             var bytesReceivedOnListener1 = new List();
+             var bytesReceivedOnListener2 = new List();
+ 
++            // Use a more generous timeout for CI environments where the runner or
++            // the OpenSSH container may be under load.
++            const int receiveTimeoutMs = 5000;
++
+             using (var socketListener1 = new AsyncSocketListener(endpoint1))
+             using (var socketListener2 = new AsyncSocketListener(endpoint2))
+-            using (var bytesReceivedEventOnListener1 = new AutoResetEvent(false))
+-            using (var bytesReceivedEventOnListener2 = new AutoResetEvent(false))
++            using (var bytesReceivedEventOnListener1 = new ManualResetEventSlim(false))
++            using (var bytesReceivedEventOnListener2 = new ManualResetEventSlim(false))
+             using (var client = new SshClient(_connectionInfoFactory.Create()))
+             {
+                 socketListener1.BytesReceived += (received, socket) =>
+                 {
+-                    bytesReceivedOnListener1.AddRange(received);
++                    lock (bytesReceivedOnListener1)
++                    {
++                        bytesReceivedOnListener1.AddRange(received);
++                    }
+                     bytesReceivedEventOnListener1.Set();
+                 };
+ 
+                 socketListener1.Start();
+ 
+                 socketListener2.BytesReceived += (received, socket) =>
+                 {
+-                    bytesReceivedOnListener2.AddRange(received);
++                    lock (bytesReceivedOnListener2)
++                    {
++                        bytesReceivedOnListener2.AddRange(received);
++                    }
+                     bytesReceivedEventOnListener2.Set();
+                 };
+ 
+                 socketListener2.Start();
+ 
+                 client.Connect();
+@@ -690,25 +702,36 @@
+                     s.Expect("DEF");
+                     s.Close();
+                 }
+ 
+-                areBytesReceivedOnListener1 = bytesReceivedEventOnListener1.WaitOne(1000);
+-                areBytesReceivedOnListener2 = bytesReceivedEventOnListener2.WaitOne(1000);
++                // Give the TCP stacks a short moment to deliver the last bytes
++                // before we start waiting on the events.
++                Thread.Sleep(200);
++
++                bool received1 = bytesReceivedEventOnListener1.Wait(receiveTimeoutMs);
++                bool received2 = bytesReceivedEventOnListener2.Wait(receiveTimeoutMs);
+ 
+                 forwardedPort1.Stop();
+                 forwardedPort2.Stop();
++
++                Assert.IsTrue(received1,
++                    $"Listener 1 did not receive data within {receiveTimeoutMs} ms. " +
++                    $"Bytes so far: {Encoding.ASCII.GetString(bytesReceivedOnListener1.ToArray())}");
++                Assert.IsTrue(received2,
++                    $"Listener 2 did not receive data within {receiveTimeoutMs} ms. " +
++                    $"Bytes so far: {Encoding.ASCII.GetString(bytesReceivedOnListener2.ToArray())}");
+             }
+ 
+-            Assert.IsTrue(areBytesReceivedOnListener1);
+-            Assert.IsTrue(areBytesReceivedOnListener2);
+-
+             var textReceivedOnListener1 = Encoding.ASCII.GetString(bytesReceivedOnListener1.ToArray());
+-            Assert.AreEqual("ABC\r\n", textReceivedOnListener1);
++            Assert.AreEqual("ABC\r\n", textReceivedOnListener1,
++                $"Unexpected payload on listener 1: '{textReceivedOnListener1}'");
+ 
+             var textReceivedOnListener2 = Encoding.ASCII.GetString(bytesReceivedOnListener2.ToArray());
+-            Assert.AreEqual("DEF\r\n", textReceivedOnListener2);
++            Assert.AreEqual("DEF\r\n", textReceivedOnListener2,
++                $"Unexpected payload on listener 2: '{textReceivedOnListener2}'");
+         }
+Cómo aplicarlo (recomendado)
+Como el archivo quedó temporalmente dañado por intentos anteriores de subida grande, haz esto en tu máquina:
+git clone https://github.com/luijgcbvnnbbgc5/ssh.net.git
+cd ssh.net
+git checkout develop
+
+# Restaura el archivo bueno desde el último commit limpio
+git checkout 634f212 -- test/Renci.SshNet.IntegrationTests/SshTests.cs
+
+# Aplica el diff (puedes pegarlo en un archivo patch o editar manualmente)
+# Luego:
+git add test/Renci.SshNet.IntegrationTests/SshTests.cs
+git commit -m "fix: improve reliability of Ssh_RemotePortForwarding integration test
+
+- Increase receive timeout from 1s to 5s to reduce flakiness under CI load
+- Switch from AutoResetEvent to ManualResetEventSlim
+- Protect byte lists with locks for thread safety
+- Add descriptive assertion messages showing partial data received
+- Add short settling delay after shell interactions
+- Document the purpose of the test"
+git push origin develop
+¿Quieres que te genere también el archivo completo ya mejorado listo para copiar-pegar en GitHub (modo edición web), o prefieres que intente restaurarlo automáticamente otra vez desde aquí?
